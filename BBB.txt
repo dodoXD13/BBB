@@ -1,0 +1,218 @@
+getgenv().EggStealerEnabled = true
+
+--// PUT YOUR RAW SCRIPT URL HERE
+local SCRIPT_URL = "https://raw.githubusercontent.com/YOURNAME/YOURREPO/main/EggStealer.lua"
+
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
+
+local player = Players.LocalPlayer
+local PlaceID = game.PlaceId
+
+--// QUEUE SCRIPT AFTER TELEPORT
+local queueTeleport =
+    queue_on_teleport
+    or queueonteleport
+    or (syn and syn.queue_on_teleport)
+
+local function QueueScript()
+    if not queueTeleport then
+        warn("queue_on_teleport is not supported by this executor.")
+        return
+    end
+
+    queueTeleport(
+        'loadstring(game:HttpGet("' ..
+        SCRIPT_URL ..
+        '"))()'
+    )
+end
+
+--// SERVER HOP
+local AllIDs = {}
+local foundAnything = ""
+local actualHour = os.date("!*t").hour
+
+local loadedFile = pcall(function()
+    AllIDs = HttpService:JSONDecode(
+        readfile("NotSameServers.json")
+    )
+end)
+
+if not loadedFile or type(AllIDs) ~= "table" then
+    AllIDs = {actualHour}
+
+    pcall(function()
+        writefile(
+            "NotSameServers.json",
+            HttpService:JSONEncode(AllIDs)
+        )
+    end)
+end
+
+local function IsServerUsed(id)
+    for _, oldID in ipairs(AllIDs) do
+        if tostring(oldID) == tostring(id) then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function TPReturner()
+    local url =
+        "https://games.roblox.com/v1/games/" ..
+        PlaceID ..
+        "/servers/Public?sortOrder=Asc&limit=100"
+
+    if foundAnything ~= "" then
+        url = url .. "&cursor=" .. foundAnything
+    end
+
+    local success, result = pcall(function()
+        return HttpService:JSONDecode(
+            game:HttpGet(url)
+        )
+    end)
+
+    if not success or not result or not result.data then
+        return false
+    end
+
+    foundAnything = result.nextPageCursor or ""
+
+    for _, server in ipairs(result.data) do
+        local id = tostring(server.id)
+
+        if server.playing < server.maxPlayers
+            and not IsServerUsed(id) then
+
+            table.insert(AllIDs, id)
+
+            pcall(function()
+                writefile(
+                    "NotSameServers.json",
+                    HttpService:JSONEncode(AllIDs)
+                )
+            end)
+
+            -- Queue this exact script for the new server
+            QueueScript()
+
+            task.wait(0.2)
+
+            TeleportService:TeleportToPlaceInstance(
+                PlaceID,
+                id,
+                player
+            )
+
+            return true
+        end
+    end
+
+    return false
+end
+
+local function ServerHop()
+    foundAnything = ""
+
+    while getgenv().EggStealerEnabled do
+        local hopped = false
+
+        pcall(function()
+            hopped = TPReturner()
+
+            if not hopped and foundAnything ~= "" then
+                foundAnything = ""
+                hopped = TPReturner()
+            end
+        end)
+
+        if hopped then
+            return
+        end
+
+        task.wait(1)
+    end
+end
+
+--// EGG COLLECTOR
+local function StartCollector()
+    task.spawn(function()
+        while getgenv().EggStealerEnabled do
+            local character = player.Character
+            local hrp = character and character:FindFirstChild("HumanoidRootPart")
+
+            if not hrp then
+                task.wait(1)
+                continue
+            end
+
+            local eggs = {}
+
+            if workspace:FindFirstChild("EggField") then
+                for _, egg in ipairs(workspace.EggField:GetChildren()) do
+                    local hitbox = egg:FindFirstChild("Hitbox")
+                    local prompt =
+                        hitbox and
+                        hitbox:FindFirstChildOfClass("ProximityPrompt")
+
+                    if hitbox and prompt then
+                        table.insert(eggs, {
+                            hitbox = hitbox,
+                            prompt = prompt
+                        })
+                    end
+                end
+            end
+
+            --// NO EGGS -> SERVER HOP
+            if #eggs == 0 then
+                task.wait(0.2)
+
+                if getgenv().EggStealerEnabled then
+                    ServerHop()
+                end
+
+                break
+            end
+
+            local originalCFrame = hrp.CFrame
+
+            for _, egg in ipairs(eggs) do
+                if not getgenv().EggStealerEnabled then
+                    break
+                end
+
+                local hitbox = egg.hitbox
+                local prompt = egg.prompt
+
+                if hitbox.Parent and prompt.Parent then
+                    hrp.CFrame =
+                        hitbox.CFrame +
+                        Vector3.new(0, 3, 0)
+
+                    task.wait(0.15)
+
+                    fireproximityprompt(prompt)
+
+                    task.wait(0.15)
+
+                    if hrp.Parent then
+                        hrp.CFrame = originalCFrame
+                    end
+
+                    task.wait(0.1)
+                end
+            end
+
+            task.wait(0.5)
+        end
+    end)
+end
+
+--// START
+StartCollector()
