@@ -1,7 +1,7 @@
 getgenv().EggStealerEnabled = true
 
 --// PUT YOUR RAW SCRIPT URL HERE
-local SCRIPT_URL = "https://raw.githubusercontent.com/YOURNAME/YOURREPO/main/EggStealer.lua"
+local SCRIPT_URL = "https://raw.githubusercontent.com/dodoXD13/BBB/refs/heads/main/BBB.txt"
 
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
